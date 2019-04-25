@@ -391,7 +391,7 @@ fn to_pretty_impl_header(tcx: TyCtxt<'_, '_, '_>, impl_def_id: DefId) -> Option<
     use std::fmt::Write;
 
     let trait_ref = if let Some(tr) = tcx.impl_trait_ref(impl_def_id) {
-        tr
+        tr.print_only_trait_path()
     } else {
         return None;
     };

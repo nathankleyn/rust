@@ -406,7 +406,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
 
             p!(print(self_ty));
             if let Some(trait_ref) = trait_ref {
-                p!(write(" as "), print(trait_ref));
+                p!(write(" as "), print(trait_ref.print_only_trait_path()));
             }
             Ok(cx)
         })
@@ -425,7 +425,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
 
             p!(write("impl "));
             if let Some(trait_ref) = trait_ref {
-                p!(print(trait_ref), write(" for "));
+                p!(print(trait_ref.print_only_trait_path()), write(" for "));
             }
             p!(print(self_ty));
 
@@ -559,7 +559,7 @@ pub trait PrettyPrinter<'gcx: 'tcx, 'tcx>:
 
                         p!(
                                 write("{}", if first { " " } else { "+" }),
-                                print(trait_ref));
+                                print(trait_ref.print_only_trait_path()));
                         first = false;
                     }
                 }
@@ -1395,6 +1395,52 @@ impl<'gcx: 'tcx, 'tcx, T, U, P: PrettyPrinter<'gcx, 'tcx>> Print<'gcx, 'tcx, P>
     }
 }
 
+/// Wrapper type for `ty::TraitRef` which opts-in to pretty printing only
+/// the trait path. That is, it will print `Trait<U>` instead of
+/// `<T as Trait<U>>`.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, RustcEncodable, RustcDecodable, HashStable)]
+pub struct TraitRefPrintOnlyTraitPath<'tcx>(ty::TraitRef<'tcx>);
+
+impl TraitRefPrintOnlyTraitPath<'tcx> {
+    pub fn self_ty(&self) -> ty::Ty<'tcx> {
+        self.0.self_ty()
+    }
+}
+
+impl fmt::Debug for TraitRefPrintOnlyTraitPath<'tcx> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+impl<'a, 'tcx> ty::Lift<'tcx> for TraitRefPrintOnlyTraitPath<'a> {
+    type Lifted = TraitRefPrintOnlyTraitPath<'tcx>;
+    fn lift_to_tcx<'b, 'gcx>(&self, tcx: TyCtxt<'b, 'gcx, 'tcx>) -> Option<Self::Lifted> {
+        tcx.lift(&self.0.substs).map(|substs| TraitRefPrintOnlyTraitPath(ty::TraitRef {
+            def_id: self.0.def_id,
+            substs,
+        }))
+    }
+}
+
+TupleStructTypeFoldableImpl! {
+    impl<'tcx> TypeFoldable<'tcx> for TraitRefPrintOnlyTraitPath<'tcx> {
+        a
+    }
+}
+
+impl ty::TraitRef<'tcx> {
+    pub fn print_only_trait_path(self) -> TraitRefPrintOnlyTraitPath<'tcx> {
+        TraitRefPrintOnlyTraitPath(self)
+    }
+}
+
+impl ty::PolyTraitRef<'tcx> {
+    pub fn print_only_trait_path(self) -> ty::Binder<TraitRefPrintOnlyTraitPath<'tcx>> {
+        self.map_bound(|x| TraitRefPrintOnlyTraitPath(x))
+    }
+}
+
 macro_rules! forward_display_to_print {
     ($($ty:ty),+) => {
         $(impl fmt::Display for $ty {
@@ -1447,6 +1493,7 @@ forward_display_to_print! {
     // because `for<'gcx: 'tcx, 'tcx>` isn't possible yet.
     ty::Binder<&'tcx ty::List<ty::ExistentialPredicate<'tcx>>>,
     ty::Binder<ty::TraitRef<'tcx>>,
+    ty::Binder<TraitRefPrintOnlyTraitPath<'tcx>>,
     ty::Binder<ty::FnSig<'tcx>>,
     ty::Binder<ty::TraitPredicate<'tcx>>,
     ty::Binder<ty::SubtypePredicate<'tcx>>,
@@ -1482,7 +1529,7 @@ define_print_and_forward_display! {
         // Use a type that can't appear in defaults of type parameters.
         let dummy_self = cx.tcx().mk_infer(ty::FreshTy(0));
         let trait_ref = self.with_self_ty(cx.tcx(), dummy_self);
-        p!(print(trait_ref))
+        p!(print(trait_ref.print_only_trait_path()))
     }
 
     ty::ExistentialProjection<'tcx> {
@@ -1528,7 +1575,11 @@ define_print_and_forward_display! {
     }
 
     ty::TraitRef<'tcx> {
-        p!(print_def_path(self.def_id, self.substs));
+        p!(write("<{} as {}>", self.self_ty(), self))
+    }
+
+    TraitRefPrintOnlyTraitPath<'tcx> {
+        p!(print_def_path(self.0.def_id, self.0.substs));
     }
 
     &'tcx ty::Const<'tcx> {
@@ -1553,7 +1604,7 @@ define_print_and_forward_display! {
     }
 
     ty::TraitPredicate<'tcx> {
-        p!(print(self.trait_ref.self_ty()), write(": "), print(self.trait_ref))
+        p!(print(self.trait_ref.self_ty()), write(": "), print(self.trait_ref.print_only_trait_path()))
     }
 
     ty::ProjectionPredicate<'tcx> {

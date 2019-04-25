@@ -641,7 +641,8 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                         let is_try = self.tcx.sess.source_map().span_to_snippet(span)
                             .map(|s| &s == "?")
                             .unwrap_or(false);
-                        let is_from = format!("{}", trait_ref).starts_with("std::convert::From<");
+                        let is_from = format!("{}", trait_ref.print_only_trait_path())
+                            .starts_with("std::convert::From<");
                         let message = if is_try && is_from {
                             Some(format!(
                                 "`?` couldn't convert the error to `{}`",
@@ -667,7 +668,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                             } else {
                                 format!("{}the trait `{}` is not implemented for `{}`",
                                         pre_message,
-                                        trait_ref,
+                                        trait_ref.print_only_trait_path(),
                                         trait_ref.self_ty())
                             };
 
@@ -1630,7 +1631,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                 let parent_trait_ref = self.resolve_type_vars_if_possible(&data.parent_trait_ref);
                 err.note(
                     &format!("required because of the requirements on the impl of `{}` for `{}`",
-                             parent_trait_ref,
+                             parent_trait_ref.print_only_trait_path(),
                              parent_trait_ref.skip_binder().self_ty()));
                 let parent_predicate = parent_trait_ref.to_predicate();
                 self.note_obligation_cause_code(err,

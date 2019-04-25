@@ -373,7 +373,7 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             value: trait_ref,
         };
 
-        let mut expected_trait_ref = highlight_trait_ref(expected_trait_ref);
+        let mut expected_trait_ref = highlight_trait_ref(expected_trait_ref.print_only_trait_path());
         expected_trait_ref.highlight.maybe_highlighting_region(sub_placeholder, has_sub);
         expected_trait_ref.highlight.maybe_highlighting_region(sup_placeholder, has_sup);
         err.note(&{
@@ -427,7 +427,7 @@ impl NiceRegionError<'me, 'gcx, 'tcx> {
             note
         });
 
-        let mut actual_trait_ref = highlight_trait_ref(actual_trait_ref);
+        let mut actual_trait_ref = highlight_trait_ref(actual_trait_ref.print_only_trait_path());
         actual_trait_ref.highlight.maybe_highlighting_region(vid, actual_has_vid);
         err.note(&{
             let passive_voice = match actual_has_vid {
